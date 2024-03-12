@@ -6,7 +6,10 @@ use std::{
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::{
-    rustls::{server::WebPkiClientVerifier, ClientConfig, RootCertStore, ServerConfig},
+    rustls::{
+        client::danger::ServerCertVerifier, server::WebPkiClientVerifier, ClientConfig,
+        RootCertStore, ServerConfig,
+    },
     TlsAcceptor as RustlsAcceptor, TlsConnector as RustlsConnector,
 };
 
@@ -39,6 +42,7 @@ impl TlsConnector {
         identity: Option<Identity>,
         domain: &str,
         assume_http2: bool,
+        #[cfg(feature = "tls-danger")] verifier: Option<Arc<dyn ServerCertVerifier>>,
     ) -> Result<Self, crate::Error> {
         let builder = ClientConfig::builder();
         let mut roots = RootCertStore::empty();
@@ -63,6 +67,14 @@ impl TlsConnector {
         };
 
         config.alpn_protocols.push(ALPN_H2.into());
+
+        #[cfg(feature = "tls-danger")]
+        {
+            if let Some(verifier) = verifier {
+                config.dangerous().set_certificate_verifier(verifier);
+            }
+        }
+
         Ok(Self {
             config: Arc::new(config),
             domain: Arc::new(ServerName::try_from(domain)?.to_owned()),

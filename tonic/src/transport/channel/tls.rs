@@ -4,7 +4,8 @@ use crate::transport::{
     Error,
 };
 use http::Uri;
-use std::fmt;
+use std::{fmt, sync::Arc};
+use tokio_rustls::rustls::client::danger::ServerCertVerifier;
 
 /// Configures TLS settings for endpoints.
 #[derive(Clone, Default)]
@@ -13,6 +14,8 @@ pub struct ClientTlsConfig {
     cert: Option<Certificate>,
     identity: Option<Identity>,
     assume_http2: bool,
+    #[cfg(feature = "tls-danger")]
+    verifier: Option<Arc<dyn ServerCertVerifier>>,
 }
 
 impl fmt::Debug for ClientTlsConfig {
@@ -33,6 +36,8 @@ impl ClientTlsConfig {
             cert: None,
             identity: None,
             assume_http2: false,
+            #[cfg(feature = "tls-danger")]
+            verifier: None,
         }
     }
 
@@ -69,6 +74,15 @@ impl ClientTlsConfig {
         }
     }
 
+    /// Sets a custom certificate verifier.
+    #[cfg(feature = "tls-danger")]
+    pub fn verifier(self, verifier: Arc<dyn ServerCertVerifier>) -> Self {
+        ClientTlsConfig {
+            verifier: Some(verifier),
+            ..self
+        }
+    }
+
     pub(crate) fn tls_connector(&self, uri: Uri) -> Result<TlsConnector, crate::Error> {
         let domain = match &self.domain {
             Some(domain) => domain,
@@ -79,6 +93,8 @@ impl ClientTlsConfig {
             self.identity.clone(),
             domain,
             self.assume_http2,
+            #[cfg(feature = "tls-danger")]
+            self.verifier.clone(),
         )
     }
 }

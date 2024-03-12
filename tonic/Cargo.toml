@@ -32,6 +32,7 @@ tls = ["dep:rustls-pki-types", "dep:rustls-pemfile", "transport", "dep:tokio-rus
 tls-roots = ["tls-roots-common", "dep:rustls-native-certs"]
 tls-roots-common = ["tls"]
 tls-webpki-roots = ["tls-roots-common", "dep:webpki-roots"]
+tls-danger = ["tls"]
 transport = [
   "dep:async-stream",
   "dep:axum",
