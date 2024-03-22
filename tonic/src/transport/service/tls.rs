@@ -7,8 +7,9 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::{
     rustls::{
-        client::danger::ServerCertVerifier, server::WebPkiClientVerifier, ClientConfig,
-        RootCertStore, ServerConfig,
+        client::danger::ServerCertVerifier,
+        server::{danger::ClientCertVerifier, WebPkiClientVerifier},
+        ClientConfig, RootCertStore, ServerConfig,
     },
     TlsAcceptor as RustlsAcceptor, TlsConnector as RustlsConnector,
 };
@@ -119,31 +120,67 @@ impl TlsAcceptor {
         identity: Identity,
         client_ca_root: Option<Certificate>,
         client_auth_optional: bool,
+        #[cfg(feature = "tls-danger")] verifier: Option<Arc<dyn ClientCertVerifier>>,
     ) -> Result<Self, crate::Error> {
-        let builder = ServerConfig::builder();
-
-        let builder = match client_ca_root {
-            None => builder.with_no_client_auth(),
-            Some(cert) => {
-                let mut roots = RootCertStore::empty();
-                add_certs_from_pem(&mut Cursor::new(cert), &mut roots)?;
-                let verifier = if client_auth_optional {
-                    WebPkiClientVerifier::builder(roots.into()).allow_unauthenticated()
-                } else {
-                    WebPkiClientVerifier::builder(roots.into())
-                }
-                .build()?;
+        #[cfg(feature = "tls-danger")]
+        {
+            let builder = ServerConfig::builder();
+            let builder = if let Some(verifier) = verifier {
                 builder.with_client_cert_verifier(verifier)
-            }
-        };
+            } else {
+                match client_ca_root {
+                    None => builder.with_no_client_auth(),
+                    Some(cert) => {
+                        let mut roots = RootCertStore::empty();
+                        add_certs_from_pem(&mut Cursor::new(cert), &mut roots)?;
+                        let verifier = if client_auth_optional {
+                            WebPkiClientVerifier::builder(roots.into()).allow_unauthenticated()
+                        } else {
+                            WebPkiClientVerifier::builder(roots.into())
+                        }
+                        .build()?;
+                        builder.with_client_cert_verifier(verifier)
+                    }
+                }
+            };
 
-        let (cert, key) = load_identity(identity)?;
-        let mut config = builder.with_single_cert(cert, key)?;
+            let (cert, key) = load_identity(identity)?;
+            let mut config = builder.with_single_cert(cert, key)?;
 
-        config.alpn_protocols.push(ALPN_H2.into());
-        Ok(Self {
-            inner: Arc::new(config),
-        })
+            config.alpn_protocols.push(ALPN_H2.into());
+
+            Ok(Self {
+                inner: Arc::new(config),
+            })
+        }
+
+        #[cfg(not(feature = "tls-danger"))]
+        {
+            let builder = ServerConfig::builder();
+            let builder = match client_ca_root {
+                None => builder.with_no_client_auth(),
+                Some(cert) => {
+                    let mut roots = RootCertStore::empty();
+                    add_certs_from_pem(&mut Cursor::new(cert), &mut roots)?;
+                    let verifier = if client_auth_optional {
+                        WebPkiClientVerifier::builder(roots.into()).allow_unauthenticated()
+                    } else {
+                        WebPkiClientVerifier::builder(roots.into())
+                    }
+                    .build()?;
+                    builder.with_client_cert_verifier(verifier)
+                }
+            };
+
+            let (cert, key) = load_identity(identity)?;
+            let mut config = builder.with_single_cert(cert, key)?;
+
+            config.alpn_protocols.push(ALPN_H2.into());
+
+            Ok(Self {
+                inner: Arc::new(config),
+            })
+        }
     }
 
     pub(crate) async fn accept<IO>(&self, io: IO) -> Result<TlsStream<IO>, crate::Error>

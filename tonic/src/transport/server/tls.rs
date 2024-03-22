@@ -1,8 +1,10 @@
+use tokio_rustls::rustls::server::danger::ClientCertVerifier;
+
 use crate::transport::{
     service::TlsAcceptor,
     tls::{Certificate, Identity},
 };
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 /// Configures TLS settings for servers.
 #[derive(Clone, Default)]
@@ -10,6 +12,8 @@ pub struct ServerTlsConfig {
     identity: Option<Identity>,
     client_ca_root: Option<Certificate>,
     client_auth_optional: bool,
+    #[cfg(feature = "tls-danger")]
+    verifier: Option<Arc<dyn ClientCertVerifier>>,
 }
 
 impl fmt::Debug for ServerTlsConfig {
@@ -25,6 +29,8 @@ impl ServerTlsConfig {
             identity: None,
             client_ca_root: None,
             client_auth_optional: false,
+            #[cfg(feature = "tls-danger")]
+            verifier: None,
         }
     }
 
@@ -57,11 +63,22 @@ impl ServerTlsConfig {
         }
     }
 
+    /// Sets a custom certificate verifier.
+    #[cfg(feature = "tls-danger")]
+    pub fn certificate_verifier(self, verifier: Arc<dyn ClientCertVerifier>) -> Self {
+        ServerTlsConfig {
+            verifier: Some(verifier),
+            ..self
+        }
+    }
+
     pub(crate) fn tls_acceptor(&self) -> Result<TlsAcceptor, crate::Error> {
         TlsAcceptor::new(
             self.identity.clone().unwrap(),
             self.client_ca_root.clone(),
             self.client_auth_optional,
+            #[cfg(feature = "tls-danger")]
+            self.verifier.clone(),
         )
     }
 }
