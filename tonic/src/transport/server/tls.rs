@@ -65,7 +65,7 @@ impl ServerTlsConfig {
 
     /// Sets a custom certificate verifier.
     #[cfg(feature = "tls-danger")]
-    pub fn certificate_verifier(self, verifier: Arc<dyn ClientCertVerifier>) -> Self {
+    pub fn with_client_cert_verifier(self, verifier: Arc<dyn ClientCertVerifier>) -> Self {
         ServerTlsConfig {
             verifier: Some(verifier),
             ..self
