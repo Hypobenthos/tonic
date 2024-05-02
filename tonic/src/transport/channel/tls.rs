@@ -87,7 +87,9 @@ impl ClientTlsConfig {
         let domain = match &self.domain {
             Some(domain) => domain,
             None => uri.host().ok_or_else(Error::new_invalid_uri)?,
-        };
+        }
+        .trim_start_matches('[')
+        .trim_end_matches(']');
         TlsConnector::new(
             self.cert.clone(),
             self.identity.clone(),
