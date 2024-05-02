@@ -76,6 +76,8 @@ impl TlsConnector {
             }
         }
 
+        let domain = domain.trim_start_matches('[').trim_end_matches(']');
+
         Ok(Self {
             config: Arc::new(config),
             domain: Arc::new(ServerName::try_from(domain)?.to_owned()),
