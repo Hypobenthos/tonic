@@ -93,6 +93,9 @@ impl TlsConnector {
             config.key_log = Arc::new(tokio_rustls::rustls::KeyLogFile::new());
         }
 
+        // Try strip brackets from the IPv6 address.
+        let domain = domain.trim_start_matches('[').trim_end_matches(']');
+
         config.alpn_protocols.push(ALPN_H2.into());
         Ok(Self {
             config: Arc::new(config),
