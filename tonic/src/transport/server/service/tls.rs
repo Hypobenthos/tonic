@@ -1,5 +1,7 @@
 use std::{fmt, sync::Arc};
 
+#[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+use rustls::server::danger::ClientCertVerifier;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::{
     rustls::{server::WebPkiClientVerifier, RootCertStore, ServerConfig},
@@ -40,6 +42,34 @@ impl TlsAcceptor {
                 .build()?;
                 builder.with_client_cert_verifier(verifier)
             }
+        };
+
+        let (cert, key) = convert_identity_to_pki_types(identity)?;
+        let mut config = builder.with_single_cert(cert, key)?;
+        config.ignore_client_order = ignore_client_order;
+
+        if use_key_log {
+            config.key_log = Arc::new(tokio_rustls::rustls::KeyLogFile::new());
+        }
+
+        config.alpn_protocols.push(ALPN_H2.into());
+        Ok(Self {
+            inner: Arc::new(config),
+        })
+    }
+
+    #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+    pub(crate) fn from_verifier(
+        identity: &Identity,
+        verifier: Option<Arc<dyn ClientCertVerifier>>,
+        ignore_client_order: bool,
+        use_key_log: bool,
+    ) -> Result<Self, crate::BoxError> {
+        let builder = ServerConfig::builder();
+
+        let builder = match verifier {
+            None => builder.with_no_client_auth(),
+            Some(verifier) => builder.with_client_cert_verifier(verifier),
         };
 
         let (cert, key) = convert_identity_to_pki_types(identity)?;

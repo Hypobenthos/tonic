@@ -2,6 +2,8 @@ use std::fmt;
 
 use super::service::TlsAcceptor;
 use crate::transport::tls::{Certificate, Identity};
+#[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+use rustls::server::danger::ClientCertVerifier;
 
 /// Configures TLS settings for servers.
 #[derive(Clone, Default)]
@@ -11,6 +13,8 @@ pub struct ServerTlsConfig {
     client_auth_optional: bool,
     ignore_client_order: bool,
     use_key_log: bool,
+    #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+    verifier: Option<std::sync::Arc<dyn ClientCertVerifier>>,
 }
 
 impl fmt::Debug for ServerTlsConfig {
@@ -73,13 +77,35 @@ impl ServerTlsConfig {
         }
     }
 
+    #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+    /// Sets the client certificate verifier.
+    pub fn certificate_verifier(
+        self,
+        verifier: Option<std::sync::Arc<dyn ClientCertVerifier>>,
+    ) -> Self {
+        ServerTlsConfig { verifier, ..self }
+    }
+
     pub(crate) fn tls_acceptor(&self) -> Result<TlsAcceptor, crate::BoxError> {
-        TlsAcceptor::new(
-            self.identity.as_ref().unwrap(),
-            self.client_ca_root.as_ref(),
-            self.client_auth_optional,
-            self.ignore_client_order,
-            self.use_key_log,
-        )
+        #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+        {
+            TlsAcceptor::from_verifier(
+                self.identity.as_ref().unwrap(),
+                self.verifier.clone(),
+                self.ignore_client_order,
+                self.use_key_log,
+            )
+        }
+
+        #[cfg(not(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger")))]
+        {
+            TlsAcceptor::new(
+                self.identity.as_ref().unwrap(),
+                self.client_ca_root.as_ref(),
+                self.client_auth_optional,
+                self.ignore_client_order,
+                self.use_key_log,
+            )
+        }
     }
 }
