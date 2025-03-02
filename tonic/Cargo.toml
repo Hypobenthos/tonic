@@ -27,7 +27,7 @@ codegen = ["dep:async-trait"]
 gzip = ["dep:flate2"]
 deflate = ["dep:flate2"]
 zstd = ["dep:zstd"]
-default = ["router", "transport", "codegen", "prost", "tls-ring-danger"]
+default = ["router", "transport", "codegen", "prost"]
 prost = ["dep:prost"]
 _tls-any = [
   "dep:tokio-rustls",
