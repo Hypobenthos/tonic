@@ -4,6 +4,8 @@ use crate::transport::{
     Error,
 };
 use http::Uri;
+#[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+use tokio_rustls::rustls::client::danger::ServerCertVerifier;
 use tokio_rustls::rustls::pki_types::TrustAnchor;
 
 /// Configures TLS settings for endpoints.
@@ -19,6 +21,8 @@ pub struct ClientTlsConfig {
     #[cfg(feature = "tls-webpki-roots")]
     with_webpki_roots: bool,
     use_key_log: bool,
+    #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+    verifier: Option<std::sync::Arc<dyn ServerCertVerifier>>,
 }
 
 impl ClientTlsConfig {
@@ -121,6 +125,15 @@ impl ClientTlsConfig {
         config
     }
 
+    #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+    /// Sets the server certificate verifier.
+    pub fn verifier(self, verifier: std::sync::Arc<dyn ServerCertVerifier>) -> Self {
+        ClientTlsConfig {
+            verifier: Some(verifier),
+            ..self
+        }
+    }
+
     pub(crate) fn into_tls_connector(self, uri: &Uri) -> Result<TlsConnector, crate::BoxError> {
         let domain = match &self.domain {
             Some(domain) => domain,
@@ -137,6 +150,8 @@ impl ClientTlsConfig {
             self.with_native_roots,
             #[cfg(feature = "tls-webpki-roots")]
             self.with_webpki_roots,
+            #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+            self.verifier.clone(),
         )
     }
 }

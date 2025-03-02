@@ -36,6 +36,9 @@ impl TlsConnector {
         use_key_log: bool,
         #[cfg(feature = "tls-native-roots")] with_native_roots: bool,
         #[cfg(feature = "tls-webpki-roots")] with_webpki_roots: bool,
+        #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))] verifier: Option<
+            Arc<dyn rustls::client::danger::ServerCertVerifier>,
+        >,
     ) -> Result<Self, crate::BoxError> {
         fn with_provider(
             provider: Arc<crypto::CryptoProvider>,
@@ -97,6 +100,14 @@ impl TlsConnector {
         let domain = domain.trim_start_matches('[').trim_end_matches(']');
 
         config.alpn_protocols.push(ALPN_H2.into());
+
+        #[cfg(any(feature = "tls-ring-danger", feature = "tls-aws-lc-danger"))]
+        {
+            if let Some(verifier) = verifier {
+                config.dangerous().set_certificate_verifier(verifier);
+            }
+        }
+
         Ok(Self {
             config: Arc::new(config),
             domain: Arc::new(ServerName::try_from(domain)?.to_owned()),
